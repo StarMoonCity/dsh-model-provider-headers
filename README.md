@@ -19,7 +19,7 @@
 
 ### 方式一：GitHub Release（推荐，别人也这样装）
 
-从本仓库的 [Releases](https://github.com/<your-org>/dsh-model-provider-headers/releases) 下载最新的 `dsh-model-provider-headers-<version>.tgz`，然后：
+从本仓库的 [Releases](https://github.com/StarMoonCity/dsh-model-provider-headers/releases) 下载最新的 `dsh-model-provider-headers-<version>.tgz`，然后：
 
 ```bash
 # dsh 插件装配（重启后仍在）
@@ -35,7 +35,7 @@ dev_inject_plugin { "dir": "/path/to/dsh-model-provider-headers" }
 ### 方式二：从源码构建
 
 ```bash
-git clone https://github.com/<your-org>/dsh-model-provider-headers.git
+git clone https://github.com/StarMoonCity/dsh-model-provider-headers.git
 cd dsh-model-provider-headers
 pnpm install
 DSH_CHECKOUT=<dsh 安装/源码目录> bash scripts/build.sh      # 类型检查
