@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-model-provider-headers",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "为 DSH「设置→模型」里每个 pi-ai 自定义/自建模型供应商卡片提供自定义请求头（Headers）编辑器，写入 llm-pi-ai 设置，即改即生效。",
   "type": "module",
   "main": "./lib/index.js",
