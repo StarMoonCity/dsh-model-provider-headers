@@ -1,0 +1,7 @@
+# dsh-model-provider-headers bundle 层：插入供应商请求头编辑器插件行。
+# 纯 client 插件：UI 注册进「设置→模型」的 provider-card 槽；读写走官方
+# Remote 通道（llm-pi-ai 命名空间），无需 Host 逻辑。
+- insert:
+    - id: dsh-model-provider-headers
+      name: '@dsh-external/dsh-model-provider-headers'
+      config: {}
