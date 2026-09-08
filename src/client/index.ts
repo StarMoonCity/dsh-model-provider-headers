@@ -13,7 +13,9 @@
  *    取 `value.providers[route].headers` 与 `revision`。
  *  - 写：`ctx.remote.settings.mutate('llm-pi-ai', ops, revision)`（官方 models 页同款。
  *    ops 经 Typert 在宿主 realm 解码，规避动态插件 sandbox 的跨 realm 校验问题。）
- *  - `inject` 必须声明 `slots` 与 `remote.settings`（与官方 ui-settings-models 同款）。
+ *  - `inject` 必须声明 `slots`、`remote` 与 `remote.settings`（官方 ui-settings-models
+ *    同款：`remote` 是访问 `ctx.remote` 的前置声明，只写 `remote.settings` 会在
+ *    读取 `ctx.remote` 时抛 "cannot get property remote without inject"）。
  */
 import React from 'react'
 
@@ -54,7 +56,7 @@ interface ClientContext {
   effect(callback: () => (() => void) | void, label?: string): void
 }
 
-export const inject = ['slots', 'remote.settings']
+export const inject = ['slots', 'remote', 'remote.settings']
 
 const NS = 'llm-pi-ai'
 const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
