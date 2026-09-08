@@ -13,7 +13,7 @@
 - 点 **+ 添加行** 填 `Header 名` 和 `值`，点 **保存**
 - 保存后写入 `~/.dsh/settings.yaml` 的 `llm-pi-ai.providers.<route>.headers`，下一次请求即带上这些头
 - 支持添加/删除多行；删除全部则移除该 `headers` 字段
-- 内置校验：非法 HTTP 头名或含换行的值会被拒绝
+- 内置校验：非法 HTTP 头名/值（与 Fetch `Headers` 同源）或重复（大小写不敏感）的头名会被拒绝
 
 ## 安装
 

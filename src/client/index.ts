@@ -65,7 +65,6 @@ interface ClientContext {
 export const inject = ['slots', 'remote', 'remote.settings']
 
 const NS = 'llm-pi-ai'
-const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 
 const css = `
 .hdrs-box{border:0.5px solid var(--dsw-alias-border-l3,#444);border-radius:10px;padding:8px 10px;margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:12px}
@@ -77,6 +76,7 @@ const css = `
 .hdrs-save{cursor:pointer;align-self:flex-start;border:none;border-radius:14px;background:var(--dsw-alias-button-primary-fill,#3b82f6);color:var(--dsw-alias-label-primary-foreground,#fff);padding:4px 12px;font-size:12px}
 .hdrs-status{color:var(--dsw-alias-state-success-primary,#4ade80);font-size:12px}
 .hdrs-err{color:var(--dsw-alias-state-error-primary,#f66);font-size:12px}
+.hdrs-row input:disabled,.hdrs-del:disabled,.hdrs-add:disabled,.hdrs-save:disabled{opacity:.5;cursor:default}
 `
 
 interface Row {
@@ -93,6 +93,8 @@ function ProviderHeadersCard(props: { provider: ProviderDirectoryEntry }): React
   const [status, setStatus] = React.useState('')
   const [err, setErr] = React.useState('')
   const [revision, setRevision] = React.useState<number | undefined>(undefined)
+  const [readOnly, setReadOnly] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
 
   React.useEffect(() => {
     let alive = true
@@ -100,6 +102,7 @@ function ProviderHeadersCard(props: { provider: ProviderDirectoryEntry }): React
     settingsRemote.describe().then((res) => {
       if (!alive) return
       if (!res.ok) { setErr(res.error?.message ?? '读取设置失败'); return }
+      setReadOnly(!res.value!.writable)
       const view = res.value!.namespaces.find((n) => n.ns === NS)
       if (view) setRevision(view.revision)
       const value = view?.value as { providers?: Record<string, { headers?: Record<string, string> }> } | undefined
@@ -120,42 +123,50 @@ function ProviderHeadersCard(props: { provider: ProviderDirectoryEntry }): React
     setErr('')
     setStatus('')
     if (!settingsRemote) { setErr('settings remote 不可用'); return }
+    if (saving) return
     const headers: Record<string, string> = {}
+    const seen = new Set<string>()
     let invalid = false
     for (const r of rows) {
       const k = r.k.trim()
       if (!k) continue
       const v = r.v
-      if (!TOKEN_RE.test(k) || /[\r\n]/.test(v)) { invalid = true; break }
+      const name = k.toLowerCase()
+      if (seen.has(name)) { invalid = true; break }
+      seen.add(name)
+      // 与 llm-pi-ai 落库校验同源（assertValidHeaders 用 new Headers），
+      // 覆盖非法头名、\r/\n/NUL 及超出 latin-1 的字符。
+      try { new Headers([[k, v]]) } catch { invalid = true; break }
       headers[k] = v
     }
-    if (invalid) { setErr('包含非法的 HTTP 头名或含换行的值'); return }
+    if (invalid) { setErr('包含非法的 HTTP 头名/值或重复的头名'); return }
 
     const keys = Object.keys(headers)
     const ops = keys.length === 0
       ? [{ op: 'unset', path: ['providers', route, 'headers'] }]
       : [{ op: 'set', path: ['providers', route, 'headers'], value: headers }]
 
+    setSaving(true)
     settingsRemote.mutate(NS, ops, revision).then((res) => {
       if (!res.ok) { setErr(res.error?.message ?? '保存失败'); return }
       setRevision(res.value!.revision)
       setRows(keys.length ? Object.keys(headers).map((k) => ({ k, v: String(headers[k]) })) : [{ k: '', v: '' }])
       setStatus('已保存')
-    }).catch((e: unknown) => setErr(String((e as Error)?.message ?? e)))
+    }).catch((e: unknown) => setErr(String((e as Error)?.message ?? e))).finally(() => setSaving(false))
   }
 
   return React.createElement('div', { className: 'hdrs-box' },
     React.createElement('div', { style: { fontWeight: 500 } }, '自定义请求头 (Headers)'),
     rows.map((r, i) => React.createElement('div', { className: 'hdrs-row', key: i },
-      React.createElement('input', { className: 'hdrs-key', placeholder: 'Header 名', value: r.k, onChange: (e) => update(i, 'k', e.target.value) }),
-      React.createElement('input', { placeholder: '值', value: r.v, onChange: (e) => update(i, 'v', e.target.value) }),
-      React.createElement('button', { className: 'hdrs-del', onClick: () => del(i), title: '删除' }, '✕')
+      React.createElement('input', { disabled: readOnly || saving, className: 'hdrs-key', placeholder: 'Header 名', value: r.k, onChange: (e) => update(i, 'k', e.target.value) }),
+      React.createElement('input', { disabled: readOnly || saving, placeholder: '值', value: r.v, onChange: (e) => update(i, 'v', e.target.value) }),
+      React.createElement('button', { disabled: readOnly || saving, className: 'hdrs-del', onClick: () => del(i), title: '删除' }, '✕')
     )),
     status ? React.createElement('div', { className: 'hdrs-status' }, status) : null,
     err ? React.createElement('div', { className: 'hdrs-err' }, err) : null,
     React.createElement('div', { style: { display: 'flex', gap: 8 } },
-      React.createElement('button', { className: 'hdrs-add', onClick: add }, '+ 添加行'),
-      React.createElement('button', { className: 'hdrs-save', onClick: save }, '保存')
+      React.createElement('button', { disabled: readOnly || saving, className: 'hdrs-add', onClick: add }, '+ 添加行'),
+      React.createElement('button', { disabled: readOnly || saving, className: 'hdrs-save', onClick: save }, '保存')
     )
   )
 }
