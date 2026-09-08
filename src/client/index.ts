@@ -29,17 +29,23 @@ interface ProviderDirectoryEntry {
   active?: boolean
 }
 
-/** remote.settings 的最小形状（与 dsh-api-settings-controller 的 Remote 面一致）。 */
+/** remote.settings 的最小形状（与 dsh-api-settings-controller 的 Remote 面一致）。
+ *  所有 remote 方法都返回 Typert 统一包装 `{ok, value} | {ok:false, error}`，
+ *  数据在 `value` 里，`error` 形如 `{code, message}`（写入冲突 code="settings/conflict"）。 */
 interface SettingsRemote {
   describe(): Promise<{
-    writable: boolean
-    hasDocument: boolean
-    namespaces: Array<{ ns: string; value: unknown; revision: number }>
+    ok: boolean
+    value?: {
+      writable: boolean
+      hasDocument: boolean
+      namespaces: Array<{ ns: string; value: unknown; revision: number }>
+    }
+    error?: { code: string; message: string }
   }>
   mutate(ns: string, ops: Array<Record<string, unknown>>, expectedRevision?: number): Promise<{
-    ns: string
-    revision: number
-    value: unknown
+    ok: boolean
+    value?: { ns: string; revision: number; value: unknown }
+    error?: { code: string; message: string }
   }>
 }
 
@@ -93,7 +99,8 @@ function ProviderHeadersCard(props: { provider: ProviderDirectoryEntry }): React
     if (!settingsRemote) return
     settingsRemote.describe().then((res) => {
       if (!alive) return
-      const view = res.namespaces.find((n) => n.ns === NS)
+      if (!res.ok) { setErr(res.error?.message ?? '读取设置失败'); return }
+      const view = res.value!.namespaces.find((n) => n.ns === NS)
       if (view) setRevision(view.revision)
       const value = view?.value as { providers?: Record<string, { headers?: Record<string, string> }> } | undefined
       const h = value?.providers?.[route]?.headers ?? {}
@@ -130,7 +137,8 @@ function ProviderHeadersCard(props: { provider: ProviderDirectoryEntry }): React
       : [{ op: 'set', path: ['providers', route, 'headers'], value: headers }]
 
     settingsRemote.mutate(NS, ops, revision).then((res) => {
-      setRevision(res.revision)
+      if (!res.ok) { setErr(res.error?.message ?? '保存失败'); return }
+      setRevision(res.value!.revision)
       setRows(keys.length ? Object.keys(headers).map((k) => ({ k, v: String(headers[k]) })) : [{ k: '', v: '' }])
       setStatus('已保存')
     }).catch((e: unknown) => setErr(String((e as Error)?.message ?? e)))
