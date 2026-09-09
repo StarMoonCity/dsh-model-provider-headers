@@ -1,12 +1,42 @@
 # dsh-model-provider-headers
 
-为 DSH 的「设置 → 模型」页面给**每个 pi-ai 自定义/自建模型供应商**（OpenAI 兼容网关、私有端点、自部署服务等）卡片提供一份**自定义请求头 (Headers) 编辑器**。
+为 DSH 的 pi-ai 模型供应商提供两类请求头能力：
 
-写入的目标字段是 `llm-pi-ai.providers.<route>.headers`——这是 `llm-pi-ai` 适配器本来就认可、会合并进每次出站 HTTP 请求的字段，只是官方设置页没有编辑入口。本插件补上这个入口，**即改即生效，无需重启 DSH**。
+1. **静态请求头**：在「设置 → 模型」的每个 pi-ai 供应商卡片上可视化编辑 `headers`（写入 `~/.dsh/settings.yaml`，即改即生效）。
+2. **动态会话 ID**：把**每段对话的稳定会话 ID** 作为 `x-opencode-session` 请求头发给供应商网关，供其做路由与提示词缓存优化。
 
-> 说明：官方 `deepseek-official` 适配器把请求头写死、没有 header 缝，本插件覆盖的是**自定义/自建供应商**这一类（即你在「设置 → 模型」里自己加的供应商，它们的 settingsNs 是 `llm-pi-ai`）。
+## 一、动态会话 ID（x-opencode-session）
 
-## 效果
+### 效果
+
+DSH 的 agent loop 每次请求都会把当前会话 ID 烙进 `GenerateOptions.sessionId`（`this.session.id`，形如 `session-99c2275f-…`）。本插件在**出站 HTTP 请求**上把它写成请求头：
+
+```
+POST /v1/chat/completions
+x-opencode-session: session-99c2275f-ae2f-4d03-91b5-401c4e05fdba
+```
+
+同一段对话的所有请求带**同一个稳定 ID**；不同对话（含 subagent 的子会话）各自不同。手建的一次性调用（无 `sessionId`）不注入该头。
+
+### 装配要求（重要）
+
+本插件**接管** `llm-pi-ai` 命名空间下的全部 pi-ai 供应商路由（vendored 官方适配器 + 一处改动）。因此**必须先禁用官方 `@deepseek-ai/dsh-llm-pi-ai`**——同一 provider 只能注册一个 LlmAdapter，两者同时注册会抛 `DUPLICATE_ADAPTER` 导致启动失败。
+
+包内 `cordis.patch.yml` 已包含该禁用条目，`dsh plugin add` + 重启后自动生效（组合树里会显示 `- id: llm-pi-ai` `disabled: true`，标注 `patched by @dsh-external/dsh-model-provider-headers`）。
+
+设置数据不受影响：命名空间仍是 `llm-pi-ai`，`settings.yaml` 既有配置与设置页行为完全一致。
+
+### 回滚
+
+若需恢复官方适配器：
+
+```bash
+# 1. 从 profile 移除本插件（同时移除其 bundle 层 patch）
+dsh plugin --profile web remove @dsh-external/dsh-model-provider-headers
+# 2. 重启 DSH
+```
+
+## 二、静态请求头编辑
 
 在「设置 → 模型」里展开任意 pi-ai 供应商卡片（如 `cli-pxy`、`minimax-cn`、`opencode-go`），卡片内会出现「自定义请求头 (Headers)」编辑区：
 
@@ -14,22 +44,19 @@
 - 保存后写入 `~/.dsh/settings.yaml` 的 `llm-pi-ai.providers.<route>.headers`，下一次请求即带上这些头
 - 支持添加/删除多行；删除全部则移除该 `headers` 字段
 - 内置校验：非法 HTTP 头名/值（与 Fetch `Headers` 同源）或重复（大小写不敏感）的头名会被拒绝
+- 只读环境（`writable: false`）自动禁用编辑
+
+> 动态的 `x-opencode-session` 与这里手填的静态头共存；若静态头里也填了同名项，**动态值优先**（注入发生在静态头合并之后）。
 
 ## 安装
 
-### 方式一：GitHub Release（推荐，别人也这样装）
+### 方式一：GitHub Release（推荐）
 
-从本仓库的 [Releases](https://github.com/StarMoonCity/dsh-model-provider-headers/releases) 下载最新的 `dsh-model-provider-headers-<version>.tgz`，然后：
+从本仓库的 [Releases](https://github.com/StarMoonCity/dsh-model-provider-headers/releases) 下载最新的 `dsh-external-dsh-model-provider-headers-<version>.tgz`，然后：
 
 ```bash
-# dsh 插件装配（重启后仍在）
-dsh plugin --profile web add dsh-model-provider-headers-0.0.1.tgz
-```
-
-或者使用 dsh-super-injector 运行时注入（免重启、便于热重载调试）：
-
-```text
-dev_inject_plugin { "dir": "/path/to/dsh-model-provider-headers" }
+dsh plugin --profile web add dsh-external-dsh-model-provider-headers-0.1.0.tgz
+# 重启 DSH 生效
 ```
 
 ### 方式二：从源码构建
@@ -38,18 +65,46 @@ dev_inject_plugin { "dir": "/path/to/dsh-model-provider-headers" }
 git clone https://github.com/StarMoonCity/dsh-model-provider-headers.git
 cd dsh-model-provider-headers
 pnpm install
-DSH_CHECKOUT=<dsh 安装/源码目录> bash scripts/build.sh      # 类型检查
-pnpm run build:client                                       # tsdown 打包浏览器端 → lib/client.js
-npm pack                                                    # 产出 tgz
+DSH_CHECKOUT=<dsh 安装目录> bash scripts/build.sh   # 编译 host + 复制 vendored 适配器
+pnpm run build:client                               # tsdown 打包浏览器端 → lib/client.js
+npm pack                                            # 产出 tgz
 ```
 
 ## 工作原理（给插件开发者）
 
-- **Client half only**：本插件不需要 Host 代码。UI 注册在 `settings.models.provider-card` 槽（keyed 槽，entryKey = `settingsNs`，pi-ai 供应商的 `settingsNs` 是 `llm-pi-ai`）。
-- **读**：`ctx.remote.settings.describe()` → 找到 `llm-pi-ai` 命名空间视图 → 读 `value.providers[route].headers` 与 `revision`。
-- **写**：`ctx.remote.settings.mutate('llm-pi-ai', ops, revision)` —— 与官方 `ui-settings-models` 页面完全同款通道。
-- **跨 realm 注意**：写操作必须由**浏览器端构造 ops 数组**、经 Remote 通道传输（Typert 在宿主 realm 解码）。不要在动态插件 host 沙箱里手工构造 ops 传给宿主 `settings.mutate`——node:vm 沙箱对象过不了 settings 服务的严格 `isPlainObject` 校验（`Object.getPrototypeOf(v) === Object.prototype`）。
+### 动态会话 ID 为什么必须接管适配器
+
+DSH 里给请求加头的"缝"只有一处：**适配器构建出站请求时**。其余路径都走不通：
+
+| 缝 | 能力 | 结论 |
+|---|---|---|
+| `llm/stream` waterfall | 请求深冻结、只读（"listeners read it, never rewrite it"） | ❌ 不能改请求头 |
+| `profile.headers`（settings） | 静态 `Record<string,string>`，供应商级共享 | ❌ 做不到每会话 |
+| `attributionHeaders()` | 固定函数，不可扩展 | ❌ |
+| `ctx.llm.registerAdapter(providers, adapter)` | 自定义适配器 | ✅ 唯一正路 |
+
+所以本插件 vendor 官方 `@deepseek-ai/dsh-llm-pi-ai` 的适配器源码（BSD-3-Clause），只改两处：
+
+1. `const name` → 本插件包名（避免与官方实例重名）
+2. `streamWithSnapshot` 的 `headers:` 组装处注入 `x-opencode-session`
+
+```js
+headers: {
+  ...requestHeaders(profile.headers),
+  ...options.sessionId === void 0 ? {} : { "x-opencode-session": String(options.sessionId) }
+}
+```
+
+其余全部保持官方行为：profile 解析与校验、settings section、pi-ai catalog、replay、图片管线、推理预算、重试、模型发现。
+
+### 静态请求头 UI
+
+- **Client half**：UI 注册在 `settings.models.provider-card` 槽（keyed 槽，entryKey = `settingsNs`，pi-ai 供应商是 `llm-pi-ai`）。
+- **读**：`ctx.remote.settings.describe()` → `{ok, value:{namespaces:[{ns, value, revision}]}}`（Typert 包装，数据在 `value` 里）。
+- **写**：`ctx.remote.settings.mutate('llm-pi-ai', ops, revision)`，返回同样包装 `{ok, value:{revision}}`，冲突时 `error.code === 'settings/conflict'`。
+- **inject 必须写全**：`['slots','remote','remote.settings']`——只写 `remote.settings` 会在读 `ctx.remote` 时抛 `cannot get property "remote" without inject`。
+- **跨 realm 注意**：ops 必须由浏览器端构造、经 Remote 通道传输（Typert 在宿主 realm 解码）；动态插件 host 沙箱里的对象过不了 settings 服务的严格 `isPlainObject` 校验。
 
 ## 许可
 
-BSD-3-Clause
+BSD-3-Clause。`src/vendor/llm-pi-ai.js` 源自 DeepSeek Harness 的 `@deepseek-ai/dsh-llm-pi-ai`（BSD-3-Clause），仅作上述两处修改。

@@ -1,19 +1,16 @@
 /**
- * dsh-model-provider-headers — Host half (minimal).
+ * dsh-model-provider-headers — Host half.
  *
- * 本插件的功能完全在 Client 端：读/写 `llm-pi-ai` 命名空间的请求头走官方
- * Remote 通道（ctx.remote.settings.*）。Host 这里只保留一个空插件入口，
- * 让 loader 的 `exports["."]` 解析成立（client-only 插件也必须有 `.` 入口）。
+ * 两件事：
+ *  1. 接管 `llm-pi-ai` 命名空间下的所有 pi-ai provider 路由（vendored 官方适配器，
+ *     本地仅改两处：插件名、请求头注入），把当前会话的稳定 ID 作为
+ *     `x-opencode-session` 请求头发给网关，供路由与提示词缓存优化。
+ *  2. 通过官方 settings section 继续承载 `llm-pi-ai` 设置（供应商档案、请求头），
+ *     设置页与 `settings.yaml` 行为与官方一致。
  *
- * ⚠️ 不要导出 `Config`：cordis 会对导出的 Config 走 Standard Schema 校验
- * （`Config["~standard"].validate`），普通空对象会因 `~standard` 为 undefined
- * 在启动时抛 "Cannot read properties of undefined (reading 'validate')"。
- * 不导出 Config 则 cordis 直接跳过校验（见 resolveConfig）。
+ * 装配要求：官方 `@deepseek-ai/dsh-llm-pi-ai` 必须禁用（同一 provider 只能注册
+ * 一个 LlmAdapter，否则抛 DUPLICATE_ADAPTER）。见包内 cordis.patch.yml 说明。
+ *
+ * Client half 仍在 src/client/index.ts：为每个 pi-ai 供应商卡片提供请求头编辑 UI。
  */
-export const name = '@dsh-external/dsh-model-provider-headers'
-
-export function apply(ctx: unknown): void {
-  // 无 host 逻辑。功能与数据均在浏览器端经 Remote 通道完成。
-  // 注意：不能访问 ctx.logger 等属性（没有声明 inject 的服务不能读 ctx 属性）。
-  void ctx
-}
+export { Config, PiAiAdapter, apply, inject, name, recordKeyFor, supportedProtocols } from './vendor/llm-pi-ai.js'

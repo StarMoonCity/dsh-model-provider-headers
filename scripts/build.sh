@@ -61,4 +61,10 @@ fi
 
 echo "=== Compiling host src → lib (tsc $("$TSC" --version)) ==="
 "$TSC" -p tsconfig.json
+
+# Vendored 官方适配器是纯 ESM .js（tsc 不处理其内部，只按同名 .d.ts 取类型），
+# 因此构建时原样复制到 lib/vendor/，由 lib/index.js 相对导入。
+echo "=== Copying vendored adapter → lib/vendor/ ==="
+mkdir -p lib/vendor
+cp src/vendor/llm-pi-ai.js lib/vendor/llm-pi-ai.js
 echo "=== Host build complete (client bundle is produced by tsdown via build:client) ==="

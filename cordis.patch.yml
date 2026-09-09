@@ -1,6 +1,17 @@
-# dsh-model-provider-headers bundle 层：插入供应商请求头编辑器插件行。
-# 纯 client 插件：UI 注册进「设置→模型」的 provider-card 槽；读写走官方
-# Remote 通道（llm-pi-ai 命名空间），无需 Host 逻辑。
+# dsh-model-provider-headers bundle 层
+#
+# 本插件接管 llm-pi-ai 命名空间下的全部 pi-ai 供应商路由（vendored 官方适配器
+# + 一处改动：出站请求注入 `x-opencode-session: <sessionId>`），并在「设置→模型」
+# 的供应商卡片上提供请求头编辑 UI。
+#
+# 1) 必须先禁用官方 @deepseek-ai/dsh-llm-pi-ai：同一 provider 只能注册一个
+#    LlmAdapter，两者同时注册会抛 DUPLICATE_ADAPTER 导致启动失败。
+#    设置数据仍在 settings.yaml 的 `llm-pi-ai:` 命名空间下（命名空间未变），
+#    设置页与既有配置无缝迁移。
+- id: llm-pi-ai
+  disabled: true
+
+# 2) 插入本插件（host 适配器 + client 编辑 UI）。
 - insert:
     - id: dsh-model-provider-headers
       name: '@dsh-external/dsh-model-provider-headers'

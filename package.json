@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-model-provider-headers",
-  "version": "0.0.2",
-  "description": "为 DSH「设置→模型」里每个 pi-ai 自定义/自建模型供应商卡片提供自定义请求头（Headers）编辑器，写入 llm-pi-ai 设置，即改即生效。",
+  "version": "0.1.0",
+  "description": "为 DSH 的 pi-ai 模型供应商提供请求头能力：设置页可视化编辑静态请求头，并把每段对话的稳定会话 ID 作为 x-opencode-session 请求头动态注入出站请求（供网关路由与提示词缓存优化）。",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
@@ -11,8 +11,10 @@
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {
-    "react": "^18.2.0",
-    "cordis": ">=4.0.0-rc <5"
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+    "@earendil-works/pi-ai": "*",
+    "cordis": ">=4.0.0-rc <5",
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
