@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-model-provider-headers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "为 DSH 的 pi-ai 模型供应商提供请求头能力：设置页可视化编辑静态请求头，并把每段对话的稳定会话 ID 作为 x-opencode-session 请求头动态注入出站请求（供网关路由与提示词缓存优化）。",
   "type": "module",
   "main": "./lib/index.js",

@@ -18,6 +18,29 @@ x-opencode-session: session-99c2275f-ae2f-4d03-91b5-401c4e05fdba
 
 同一段对话的所有请求带**同一个稳定 ID**；不同对话（含 subagent 的子会话）各自不同。手建的一次性调用（无 `sessionId`）不注入该头。
 
+### 开关（默认开启）
+
+注入默认开启。可按需关闭——两级配置写进 `~/.dsh/settings.yaml`，**热生效、无需重启**：
+
+```yaml
+llm-pi-ai:
+  sessionHeader: false          # ① 全局关闭：所有 pi-ai 供应商都不发
+  providers:
+    opencode-go:
+      sessionHeader: true       # ② 供应商级覆盖全局：该路由仍然发
+    minimax-cn:
+      sessionHeader: false      #    该供应商不发
+```
+
+优先级：**供应商级 > 全局级 > 默认（开启）**。
+
+典型用法：
+- 只对 opencode 网关发 → 全局 `false`，再对 `opencode-go` / `cli-pxy` 各自 `true`
+- 只让某个供应商不发 → 只给该供应商写 `sessionHeader: false`
+- 全部关掉 → 只写 `llm-pi-ai.sessionHeader: false`
+
+> 设置页「模型」里编辑供应商不会清掉这些字段（官方页面按路径增量写入 settings）。
+
 ### 装配要求（重要）
 
 本插件**接管** `llm-pi-ai` 命名空间下的全部 pi-ai 供应商路由（vendored 官方适配器 + 一处改动）。因此**必须先禁用官方 `@deepseek-ai/dsh-llm-pi-ai`**——同一 provider 只能注册一个 LlmAdapter，两者同时注册会抛 `DUPLICATE_ADAPTER` 导致启动失败。

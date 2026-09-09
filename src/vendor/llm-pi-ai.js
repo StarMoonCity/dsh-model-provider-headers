@@ -987,7 +987,7 @@ const Config = z.object({ providers: z.dict(profile).default({}) });
 * @throws Error naming the route and configuration entry that cannot be served.
 */
 function assertServiceable(config) {
-	resolveProfiles(config.providers);
+	resolveProfiles(config.providers, config.sessionHeader);
 }
 /** Reject removed pre-release profile fields and name their replacements. */
 function rejectRemovedFields(provider, source) {
@@ -1009,9 +1009,10 @@ function assertValidHeaders(provider, headers) {
 * resolves to the empty (dormant) route set here rather than through a hidden
 * fallback, and each route's models and pi-ai provider are materialized once.
 * @param providers - configured provider profiles keyed by route.
+* @param sessionHeaderDefault - section-level `sessionHeader` switch (default true).
 * @returns validated profiles in configuration order.
 */
-function resolveProfiles(providers) {
+function resolveProfiles(providers, sessionHeaderDefault) {
 	if (Array.isArray(providers)) throw new Error("llm-pi-ai: providers is now a dict keyed by provider route, not an array of profiles");
 	const entries = Object.entries(providers ?? {});
 	const resolved = /* @__PURE__ */ new Map();
@@ -1046,6 +1047,9 @@ function resolveProfiles(providers) {
 		const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source;
 		resolved.set(provider, {
 			...rest,
+			// ▼ dsh-model-provider-headers：会话头开关。供应商级 sessionHeader 优先，
+			//   否则取 section 级默认，否则默认开启（保持本插件原有行为）。
+			sessionHeader: rest.sessionHeader ?? sessionHeaderDefault ?? true,
 			provider,
 			displayName,
 			...apiKeyEnv === void 0 ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
@@ -1794,10 +1798,13 @@ var PiAiAdapter = class extends LlmAdapter {
 					signal: watchdog.signal,
 					// ▼ dsh-model-provider-headers 注入点：把当前会话的稳定 ID 作为
 					//   x-opencode-session 请求头发给网关（路由与提示词缓存优化）。
+					//   关闭方式（二选一）：
+					//     全局： llm-pi-ai.sessionHeader: false
+					//     单路由：llm-pi-ai.providers.<route>.sessionHeader: false
 					//   无 sessionId 的请求（手建调用）不注入该头。
 					headers: {
 						...requestHeaders(profile.headers),
-						...options.sessionId === void 0 ? {} : { "x-opencode-session": String(options.sessionId) }
+						...profile.sessionHeader === false || options.sessionId === void 0 ? {} : { "x-opencode-session": String(options.sessionId) }
 					}
 				}), model.contextWindow, options.signal)[Symbol.asyncIterator]();
 				let exhausted = false;
@@ -2477,7 +2484,7 @@ function apply(ctx, config) {
 	const profiles = () => {
 		const raw = current();
 		if (raw === lastRaw && memoized !== void 0) return memoized;
-		const next = resolveProfiles(raw.providers);
+		const next = resolveProfiles(raw.providers, raw.sessionHeader);
 		lastRaw = raw;
 		memoized = next;
 		return next;
