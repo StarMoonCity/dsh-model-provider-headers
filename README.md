@@ -36,6 +36,32 @@ dsh plugin --profile web remove @dsh-external/dsh-model-provider-headers
 # 2. 重启 DSH
 ```
 
+### 验证请求头确实发出
+
+用一个只记录请求头的本地服务器 + 临时把某供应商的 `baseURL` 指向它即可：
+
+```bash
+# 1. 起抓包服务器（记录到 /tmp/dsh-header-capture.log）
+node scripts/capture-headers.mjs 8399 /tmp/dsh-header-capture.log
+
+# 2. 在 settings.yaml 给一个 pi-ai 供应商临时加 baseURL
+#    llm-pi-ai:
+#      providers:
+#        opencode-go:
+#          baseURL: http://127.0.0.1:8399/v1
+
+# 3. 触发一次该供应商的请求（headless 或 UI 里发消息）
+dsh --profile headless "只回复 OK"
+
+# 4. 看抓到的头
+grep x-opencode-session /tmp/dsh-header-capture.log
+#   → x-opencode-session: session-cf5e78ec-e8fb-43eb-8a3a-a77f0abc0a3f
+
+# 5. 恢复 settings.yaml（删掉临时 baseURL）
+```
+
+同一会话的多次请求（含重试）应带**同一个** `session-<uuid>`；不同对话各自不同。
+
 ## 二、静态请求头编辑
 
 在「设置 → 模型」里展开任意 pi-ai 供应商卡片（如 `cli-pxy`、`minimax-cn`、`opencode-go`），卡片内会出现「自定义请求头 (Headers)」编辑区：
